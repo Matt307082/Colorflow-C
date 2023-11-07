@@ -6,7 +6,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${fileDirname}/${fileBasenameNoExtension}",
-            "args": ["red.png"],
+            "args": ["test-border.png"],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
             "environment": [],

@@ -21,6 +21,7 @@
 #include <png.h>
 
 int width, height;
+int start_row, start_column, end_row, end_column;
 png_byte color_type;
 png_byte bit_depth;
 png_bytep *row_pointers = NULL;
@@ -91,7 +92,7 @@ void read_png_file(char *filename) {
 png_color_8* createPixel(png_byte R, png_byte G, png_byte B, png_byte A){
   png_color_8* pixel = (png_color_8*)malloc(sizeof(png_color_8));
   if (!pixel) {
-        printf("Error while allocating memory for pixel.\n");
+        puts("Error while allocating memory for pixel.\n");
         abort();
   }
   pixel->red = R;
@@ -106,27 +107,51 @@ void freeColorPixel(png_color_8** pixel){
   *pixel=NULL;
 }
 
-png_color_8*** getPixelsImage() {
-  png_color_8*** pixels = (png_color_8***)malloc(height*sizeof(png_color_8**) + height*width*sizeof(png_color_8*));
+png_color_8*** getPixelsImage(int selector) {
+  /*
+  selector = 0 ==> up border
+  selector = 1 ==> right border
+  selector = 2 ==> down border
+  selector = 3 ==> left border
+  */
+ switch(selector){
+    case 0:
+      start_row=0; start_column=0; end_row=(int)(height*0.1); end_column=width;
+      break;
+    case 1:
+      start_row=0; start_column=(int)(width*0.9); end_row=height; end_column=width;
+      break;
+    case 2:
+      start_row=(int)(height*0.9); start_column=0; end_row=height; end_column=width;
+      break;
+    case 3:
+      start_row=0; start_column=0; end_row=height; end_column=(int)(width*0.1);
+      break;
+    default:
+      puts("selector error: only 0, 1, 2, 3 allowed\n");
+      abort();
+  } 
+  
+  png_color_8*** pixels = (png_color_8***)malloc(end_row*sizeof(png_color_8**) + end_row*end_column*sizeof(png_color_8*));
   if(!pixels){
-        printf("Error while allowing memory.\n");
+        puts("Error while allowing memory.\n");
         abort();
   }
-    
-  for(int y = 0; y < height; y++) {
-    pixels[y] = (png_color_8**)(pixels + height) + width * y;
+
+  for(int y = start_row; y < end_row; y++) {
+    pixels[y-start_row] = (png_color_8**)(pixels + end_row) + end_column * y;
     png_bytep row = row_pointers[y];
-    for(int x = 0; x < width; x++) {
+    for(int x = start_column; x < end_column; x++) {
       png_bytep px = &(row[x * 4]);
-      pixels[y][x] = createPixel(px[0],px[1],px[2],px[3]);
+      pixels[y-start_row][x-start_column] = createPixel(px[0],px[1],px[2],px[3]);
     }
   }
   return pixels;
 }
 
 void freePixels(png_color_8*** tab) {
-        for (int y = 0; y < height; y++) {
-                for (int x = 0; x < width; x++) {
+        for (int y = 0; y < end_row-start_row; y++) {
+                for (int x = 0; x < end_column-start_column; x++) {
                     if (tab[y][x]) {
                         freeColorPixel(&tab[y][x]);
                     }
@@ -144,9 +169,9 @@ int main(int argc, char *argv[]) {
   } 
 
   read_png_file(argv[1]);
-  png_color_8*** pixels_image = getPixelsImage();
-  for(int y = 0; y < height; y++) {
-    for(int x = 0; x < width; x++) {
+  png_color_8*** pixels_image = getPixelsImage(0);
+  for(int y = 0; y < end_row-start_row; y++) {
+    for(int x = 0; x < end_column-start_column; x++) {
       printf("%3d, %3d : RGBA(%3d,%3d,%3d,%3d)\n",y,x,pixels_image[y][x]->red,pixels_image[y][x]->green,pixels_image[y][x]->blue,pixels_image[y][x]->alpha);
     }
   }
