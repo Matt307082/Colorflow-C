@@ -107,7 +107,37 @@ void freeColorPixel(png_color_8** pixel){
   *pixel=NULL;
 }
 
-png_color_8*** getPixelsImage(int selector) {
+png_color_8*** getPixelsImage() {
+  png_color_8*** pixels = (png_color_8***)malloc(end_row*sizeof(png_color_8**) + end_row*end_column*sizeof(png_color_8*));
+  if(!pixels){
+        puts("Error while allowing memory.\n");
+        abort();
+  }
+
+  for(int y = start_row; y < end_row; y++) {
+    pixels[y-start_row] = (png_color_8**)(pixels + end_row) + end_column * y;
+    png_bytep row = row_pointers[y];
+    for(int x = start_column; x < end_column; x++) {
+      png_bytep px = &(row[x * 4]);
+      pixels[y-start_row][x-start_column] = createPixel(px[0],px[1],px[2],px[3]);
+    }
+  }
+  return pixels;
+}
+
+void freePixels(png_color_8*** tab) {
+  for (int y = 0; y < end_row-start_row; y++) {
+          for (int x = 0; x < end_column-start_column; x++) {
+              if (tab[y][x]) {
+                  freeColorPixel(&tab[y][x]);
+              }
+          }
+      }
+  free(tab);
+  tab=NULL;
+}
+
+int* getAverageColor(int selector){
   /*
   selector = 0 ==> up border
   selector = 1 ==> right border
@@ -130,35 +160,23 @@ png_color_8*** getPixelsImage(int selector) {
     default:
       puts("selector error: only 0, 1, 2, 3 allowed\n");
       abort();
-  } 
-  
-  png_color_8*** pixels = (png_color_8***)malloc(end_row*sizeof(png_color_8**) + end_row*end_column*sizeof(png_color_8*));
-  if(!pixels){
-        puts("Error while allowing memory.\n");
-        abort();
   }
-
-  for(int y = start_row; y < end_row; y++) {
-    pixels[y-start_row] = (png_color_8**)(pixels + end_row) + end_column * y;
-    png_bytep row = row_pointers[y];
-    for(int x = start_column; x < end_column; x++) {
-      png_bytep px = &(row[x * 4]);
-      pixels[y-start_row][x-start_column] = createPixel(px[0],px[1],px[2],px[3]);
+  png_color_8*** pixels_image = getPixelsImage();
+  static int average_RGBA[4];
+  int pixel_amount = (end_row-start_row)*(end_column-start_column);
+  for(int y = 0; y < end_row-start_row; y++) {
+    for(int x = 0; x < end_column-start_column; x++) {
+      average_RGBA[0] += (int)pixels_image[y][x]->red;
+      average_RGBA[1] += (int)pixels_image[y][x]->green;
+      average_RGBA[2] += (int)pixels_image[y][x]->blue;
+      average_RGBA[3] += (int)pixels_image[y][x]->alpha;
     }
   }
-  return pixels;
-}
-
-void freePixels(png_color_8*** tab) {
-        for (int y = 0; y < end_row-start_row; y++) {
-                for (int x = 0; x < end_column-start_column; x++) {
-                    if (tab[y][x]) {
-                        freeColorPixel(&tab[y][x]);
-                    }
-                }
-            }
-        free(tab);
-        tab=NULL;
+  freePixels(pixels_image);
+  for(int i=0;i<4;i++){
+    average_RGBA[i] /= pixel_amount;
+  }
+  return average_RGBA;
 }
 
 
@@ -169,14 +187,17 @@ int main(int argc, char *argv[]) {
   } 
 
   read_png_file(argv[1]);
-  png_color_8*** pixels_image = getPixelsImage(0);
-  for(int y = 0; y < end_row-start_row; y++) {
-    for(int x = 0; x < end_column-start_column; x++) {
-      printf("%3d, %3d : RGBA(%3d,%3d,%3d,%3d)\n",y,x,pixels_image[y][x]->red,pixels_image[y][x]->green,pixels_image[y][x]->blue,pixels_image[y][x]->alpha);
-    }
-  }
+  int* up_border_average_color = getAverageColor(0);
+  printf("RGBA(%3d,%3d,%3d,%3d)\n",up_border_average_color[0],up_border_average_color[1],up_border_average_color[2],up_border_average_color[3]);
 
-  freePixels(pixels_image);
+  int* right_border_average_color = getAverageColor(1);
+  printf("RGBA(%3d,%3d,%3d,%3d)\n",right_border_average_color[0],right_border_average_color[1],right_border_average_color[2],right_border_average_color[3]);
+
+  int* down_border_average_color = getAverageColor(2);
+  printf("RGBA(%3d,%3d,%3d,%3d)\n",down_border_average_color[0],down_border_average_color[1],down_border_average_color[2],down_border_average_color[3]);
+
+  int* left_border_average_color = getAverageColor(3);
+  printf("RGBA(%3d,%3d,%3d,%3d)\n",left_border_average_color[0],left_border_average_color[1],left_border_average_color[2],left_border_average_color[3]);
 
   return 0;
 }
