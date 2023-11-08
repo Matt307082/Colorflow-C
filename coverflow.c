@@ -21,7 +21,6 @@
 #include <png.h>
 
 int width, height;
-int start_row, start_column, end_row, end_column;
 png_byte color_type;
 png_byte bit_depth;
 png_bytep *row_pointers = NULL;
@@ -108,26 +107,26 @@ void freeColorPixel(png_color_8** pixel){
 }
 
 png_color_8*** getPixelsImage() {
-  png_color_8*** pixels = (png_color_8***)malloc(end_row*sizeof(png_color_8**) + end_row*end_column*sizeof(png_color_8*));
+  png_color_8*** pixels = (png_color_8***)malloc(height*sizeof(png_color_8**) + height*width*sizeof(png_color_8*));
   if(!pixels){
         puts("Error while allowing memory.\n");
         abort();
   }
 
-  for(int y = start_row; y < end_row; y++) {
-    pixels[y-start_row] = (png_color_8**)(pixels + end_row) + end_column * y;
+  for(int y = 0; y < height; y++) {
+    pixels[y] = (png_color_8**)(pixels + height) + width * y;
     png_bytep row = row_pointers[y];
-    for(int x = start_column; x < end_column; x++) {
+    for(int x = 0; x < width; x++) {
       png_bytep px = &(row[x * 4]);
-      pixels[y-start_row][x-start_column] = createPixel(px[0],px[1],px[2],px[3]);
+      pixels[y][x] = createPixel(px[0],px[1],px[2],px[3]);
     }
   }
   return pixels;
 }
 
 void freePixels(png_color_8*** tab) {
-  for (int y = 0; y < end_row-start_row; y++) {
-          for (int x = 0; x < end_column-start_column; x++) {
+  for (int y = 0; y < height; y++) {
+          for (int x = 0; x < width; x++) {
               if (tab[y][x]) {
                   freeColorPixel(&tab[y][x]);
               }
@@ -137,44 +136,53 @@ void freePixels(png_color_8*** tab) {
   tab=NULL;
 }
 
-int* getAverageColor(int selector){
-  /*
-  selector = 0 ==> up border
-  selector = 1 ==> right border
-  selector = 2 ==> down border
-  selector = 3 ==> left border
-  */
- switch(selector){
-    case 0:
-      start_row=0; start_column=0; end_row=(int)(height*0.1); end_column=width;
-      break;
-    case 1:
-      start_row=0; start_column=(int)(width*0.9); end_row=height; end_column=width;
-      break;
-    case 2:
-      start_row=(int)(height*0.9); start_column=0; end_row=height; end_column=width;
-      break;
-    case 3:
-      start_row=0; start_column=0; end_row=height; end_column=(int)(width*0.1);
-      break;
-    default:
-      puts("selector error: only 0, 1, 2, 3 allowed\n");
-      abort();
-  }
-  png_color_8*** pixels_image = getPixelsImage();
-  static int average_RGBA[4];
-  int pixel_amount = (end_row-start_row)*(end_column-start_column);
-  for(int y = 0; y < end_row-start_row; y++) {
-    for(int x = 0; x < end_column-start_column; x++) {
-      average_RGBA[0] += (int)pixels_image[y][x]->red;
-      average_RGBA[1] += (int)pixels_image[y][x]->green;
-      average_RGBA[2] += (int)pixels_image[y][x]->blue;
-      average_RGBA[3] += (int)pixels_image[y][x]->alpha;
+void getAverageBorderColor(png_color_8*** pixels_image, int *border_average_color, int start_row, int end_row, int start_column, int end_column){
+  // calcul de la couleur moyenne de la bordure supérieure
+  int pixel_amount = ((end_row-start_row)*(end_column-start_column));
+  for(int y=start_row; y<end_row; y++){
+    for(int x=start_column; x<end_column; x++){
+      border_average_color[0] += (int)pixels_image[y][x]->red;
+      border_average_color[1] += (int)pixels_image[y][x]->green;
+      border_average_color[2] += (int)pixels_image[y][x]->blue;
+      border_average_color[3] += (int)pixels_image[y][x]->alpha;
     }
   }
-  freePixels(pixels_image);
   for(int i=0;i<4;i++){
-    average_RGBA[i] /= pixel_amount;
+    border_average_color[i] /= pixel_amount;
+  }
+}
+
+int* getAverageColor(){
+  png_color_8*** pixels_image = getPixelsImage();
+
+  // calcul de la couleur moyenne de la bordure supérieure
+  int up_border_average_color[4] = {0,0,0,0};
+  getAverageBorderColor(pixels_image, up_border_average_color, 0, (int)(height*0.1), 0, width);
+
+  // calcul de la couleur moyenne de la bordure droite
+  int right_border_average_color[4] = {0,0,0,0};
+  getAverageBorderColor(pixels_image, right_border_average_color, 0, height, (int)(width*0.9), width);
+
+  // calcul de la couleur moyenne de la bordure inférieure
+  int down_border_average_color[4] = {0,0,0,0};
+  getAverageBorderColor(pixels_image, down_border_average_color, (int)(0.9*height), height, 0, width);
+
+  // calcul de la couleur moyenne de la bordure gauche
+  int left_border_average_color[4] = {0,0,0,0};
+  getAverageBorderColor(pixels_image, left_border_average_color, 0, height, 0, (int)(width*0.1));
+
+  printf("RGBA(%3d,%3d,%3d,%3d)\n",up_border_average_color[0],up_border_average_color[1],up_border_average_color[2],up_border_average_color[3]);
+  printf("RGBA(%3d,%3d,%3d,%3d)\n",right_border_average_color[0],right_border_average_color[1],right_border_average_color[2],right_border_average_color[3]);
+  printf("RGBA(%3d,%3d,%3d,%3d)\n",down_border_average_color[0],down_border_average_color[1],down_border_average_color[2],down_border_average_color[3]);
+  printf("RGBA(%3d,%3d,%3d,%3d)\n",left_border_average_color[0],left_border_average_color[1],left_border_average_color[2],left_border_average_color[3]);
+
+  freePixels(pixels_image);
+
+  // calcul de la couleur moyenne des 4 bordures
+  static int average_RGBA[4];
+  for(int i=0;i<4;i++){
+    average_RGBA[i] = up_border_average_color[i]+right_border_average_color[i]+down_border_average_color[i]+left_border_average_color[i];
+    average_RGBA[i] /= 4;
   }
   return average_RGBA;
 }
@@ -187,17 +195,8 @@ int main(int argc, char *argv[]) {
   } 
 
   read_png_file(argv[1]);
-  int* up_border_average_color = getAverageColor(0);
-  printf("RGBA(%3d,%3d,%3d,%3d)\n",up_border_average_color[0],up_border_average_color[1],up_border_average_color[2],up_border_average_color[3]);
-
-  int* right_border_average_color = getAverageColor(1);
-  printf("RGBA(%3d,%3d,%3d,%3d)\n",right_border_average_color[0],right_border_average_color[1],right_border_average_color[2],right_border_average_color[3]);
-
-  int* down_border_average_color = getAverageColor(2);
-  printf("RGBA(%3d,%3d,%3d,%3d)\n",down_border_average_color[0],down_border_average_color[1],down_border_average_color[2],down_border_average_color[3]);
-
-  int* left_border_average_color = getAverageColor(3);
-  printf("RGBA(%3d,%3d,%3d,%3d)\n",left_border_average_color[0],left_border_average_color[1],left_border_average_color[2],left_border_average_color[3]);
-
+  int* average_RGBA = getAverageColor();
+  puts("\n");
+  printf("RGBA(%3d,%3d,%3d,%3d)\n",average_RGBA[0],average_RGBA[1],average_RGBA[2],average_RGBA[3]);
   return 0;
 }
