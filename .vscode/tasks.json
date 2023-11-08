@@ -10,7 +10,8 @@
                 "${file}",
                 "-o",
                 "${fileDirname}/${fileBasenameNoExtension}",
-                "-lpng"
+                "-lpng",
+                "-ljpeg"
             ],
             "options": {
                 "cwd": "${fileDirname}"
