@@ -18,16 +18,54 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <png.h>
+#include <jpeglib.h>
+#include "coverflow.h"
+
+
+#define EXIT_FAILURE_OPEN_FAILED 1
+#define EXIT_FAILURE_BAD_FILE 2
+#define EXIT_FAILURE_USUPPORTED_FILE_FORMAT 3
+#define EXIT_FAILURE_MALLOC 4
+#define EXIT_FAILURE_BAD_PERCENTAGE 5
 
 int width, height;
-png_byte color_type;
-png_byte bit_depth;
-png_bytep *row_pointers = NULL;
 
-void read_png_file(char *filename) {
-  FILE *fp = fopen(filename, "rb");
-  if(!fp) abort();
+pixel* createPixel(unsigned char R, unsigned char G, unsigned char B, unsigned char A){
+  pixel* p = (pixel*)malloc(sizeof(pixel));
+  if (!p) {
+        fprintf(stderr,"Error while allocating memory for pixel.\n");
+        exit(EXIT_FAILURE_MALLOC);
+  }
+  p->red = R;
+  p->green = G;
+  p->blue = B;
+  p->alpha = A;
+  return p;
+}
+
+void freePixel(pixel** pixel){
+  free(*pixel);
+  *pixel=NULL;
+}
+
+void freePixels(pixel*** pixels) {
+  for (int y = 0; y < height; y++) {
+          for (int x = 0; x < width; x++) {
+              if (pixels[y][x]) {
+                  freePixel(&pixels[y][x]);
+              }
+          }
+      }
+  free(pixels);
+  pixels=NULL;
+}
+
+pixel*** read_png_file(FILE *file) {
+  png_byte color_type;
+  png_byte bit_depth;
+  png_bytep *row_pointers = NULL;
 
   png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
   if(!png) abort();
@@ -37,7 +75,7 @@ void read_png_file(char *filename) {
 
   if(setjmp(png_jmpbuf(png))) abort();
 
-  png_init_io(png, fp);
+  png_init_io(png, file);
 
   png_read_info(png, info);
 
@@ -83,61 +121,79 @@ void read_png_file(char *filename) {
 
   png_read_image(png, row_pointers);
 
-  fclose(fp);
-
-  png_destroy_read_struct(&png, &info, NULL);
-}
-
-png_color_8* createPixel(png_byte R, png_byte G, png_byte B, png_byte A){
-  png_color_8* pixel = (png_color_8*)malloc(sizeof(png_color_8));
-  if (!pixel) {
-        puts("Error while allocating memory for pixel.\n");
-        abort();
-  }
-  pixel->red = R;
-  pixel->green = G;
-  pixel->blue = B;
-  pixel->alpha = A;
-  return pixel;
-}
-
-void freeColorPixel(png_color_8** pixel){
-  free(*pixel);
-  *pixel=NULL;
-}
-
-png_color_8*** getPixelsImage() {
-  png_color_8*** pixels = (png_color_8***)malloc(height*sizeof(png_color_8**) + height*width*sizeof(png_color_8*));
+  pixel*** pixels = (pixel***)malloc(height*sizeof(pixel**) + height*width*sizeof(pixel*));
   if(!pixels){
-        puts("Error while allowing memory.\n");
-        abort();
+        fprintf(stderr,"Error while allowing memory for pixel matrix.\n");
+        exit(EXIT_FAILURE_MALLOC);
   }
 
   for(int y = 0; y < height; y++) {
-    pixels[y] = (png_color_8**)(pixels + height) + width * y;
+    pixels[y] = (pixel**)(pixels + height) + width * y;
     png_bytep row = row_pointers[y];
     for(int x = 0; x < width; x++) {
       png_bytep px = &(row[x * 4]);
       pixels[y][x] = createPixel(px[0],px[1],px[2],px[3]);
     }
   }
+
+  png_destroy_read_struct(&png, &info, NULL);
+
   return pixels;
 }
 
-void freePixels(png_color_8*** tab) {
-  for (int y = 0; y < height; y++) {
-          for (int x = 0; x < width; x++) {
-              if (tab[y][x]) {
-                  freeColorPixel(&tab[y][x]);
-              }
-          }
-      }
-  free(tab);
-  tab=NULL;
+pixel*** read_jpg_file(FILE *file){
+
+  // Structure for JPEG picture
+  struct jpeg_decompress_struct cinfo;
+  struct jpeg_error_mgr jerr;
+
+  cinfo.err = jpeg_std_error(&jerr);
+  jpeg_create_decompress(&cinfo);
+
+  // Link with JPEG file
+  jpeg_stdio_src(&cinfo, file);
+
+  // Reading headers
+  (void) jpeg_read_header(&cinfo, TRUE);
+
+  // Start decompress
+  (void) jpeg_start_decompress(&cinfo);
+
+  // Reading pictures informations
+  width = cinfo.output_width;
+  height = cinfo.output_height;
+  int numComponents = cinfo.output_components;
+  int row_stride = width * numComponents;
+
+  // Allow memory to be able to read 1 line of the picture
+  JSAMPARRAY buffer = (*cinfo.mem->alloc_sarray)((j_common_ptr) &cinfo, JPOOL_IMAGE, row_stride, 1);
+
+  pixel*** pixels = (pixel***)malloc(height*sizeof(pixel**) + height*width*sizeof(pixel*));
+  if(!pixels){
+        fprintf(stderr,"Error while allowing memory.\n");
+        exit(EXIT_FAILURE_MALLOC);
+  }
+
+
+  for(int y=0; y<height;y++){
+    (void) jpeg_read_scanlines(&cinfo, buffer, 1);
+    pixels[y] = (pixel**)(pixels + height) + width * y;
+    for (int x = 0; x < width; x++) {
+      pixels[y][x] = createPixel(buffer[0][x * numComponents],buffer[0][x * numComponents + 1],buffer[0][x * numComponents + 2],buffer[0][x * numComponents + 3]);
+    }
+  }
+
+  // Finish decompress
+  (void) jpeg_finish_decompress(&cinfo);
+
+  // Free ressources
+  jpeg_destroy_decompress(&cinfo);
+
+  return pixels;
 }
 
-void getAverageBorderColor(png_color_8*** pixels_image, int *border_average_color, int start_row, int end_row, int start_column, int end_column){
-  // calcul de la couleur moyenne de la bordure supérieure
+void getAverageBorderColor(pixel*** pixels_image, int *border_average_color, int start_row, int end_row, int start_column, int end_column){
+  // establishing avegarge color of the selected border
   int pixel_amount = ((end_row-start_row)*(end_column-start_column));
   for(int y=start_row; y<end_row; y++){
     for(int x=start_column; x<end_column; x++){
@@ -152,33 +208,30 @@ void getAverageBorderColor(png_color_8*** pixels_image, int *border_average_colo
   }
 }
 
-int* getAverageColor(){
-  png_color_8*** pixels_image = getPixelsImage();
+int* getAverageColor(pixel*** pixels_image, float frame_percentage){
 
-  // calcul de la couleur moyenne de la bordure supérieure
+  // establishing avegarge color of the upper border
   int up_border_average_color[4] = {0,0,0,0};
-  getAverageBorderColor(pixels_image, up_border_average_color, 0, (int)(height*0.1), 0, width);
+  getAverageBorderColor(pixels_image, up_border_average_color, 0, (int)(height*frame_percentage), 0, width);
 
-  // calcul de la couleur moyenne de la bordure droite
+  // establishing avegarge color of the right border
   int right_border_average_color[4] = {0,0,0,0};
-  getAverageBorderColor(pixels_image, right_border_average_color, 0, height, (int)(width*0.9), width);
+  getAverageBorderColor(pixels_image, right_border_average_color, 0, height, (int)(width*(1-frame_percentage)), width);
 
-  // calcul de la couleur moyenne de la bordure inférieure
+  // establishing avegarge color of the left border
   int down_border_average_color[4] = {0,0,0,0};
-  getAverageBorderColor(pixels_image, down_border_average_color, (int)(0.9*height), height, 0, width);
+  getAverageBorderColor(pixels_image, down_border_average_color, (int)((1-frame_percentage)*height), height, 0, width);
 
-  // calcul de la couleur moyenne de la bordure gauche
+  // establishing avegarge color of the lower border
   int left_border_average_color[4] = {0,0,0,0};
-  getAverageBorderColor(pixels_image, left_border_average_color, 0, height, 0, (int)(width*0.1));
+  getAverageBorderColor(pixels_image, left_border_average_color, 0, height, 0, (int)(width*frame_percentage));
 
   printf("RGBA(%3d,%3d,%3d,%3d)\n",up_border_average_color[0],up_border_average_color[1],up_border_average_color[2],up_border_average_color[3]);
   printf("RGBA(%3d,%3d,%3d,%3d)\n",right_border_average_color[0],right_border_average_color[1],right_border_average_color[2],right_border_average_color[3]);
   printf("RGBA(%3d,%3d,%3d,%3d)\n",down_border_average_color[0],down_border_average_color[1],down_border_average_color[2],down_border_average_color[3]);
   printf("RGBA(%3d,%3d,%3d,%3d)\n",left_border_average_color[0],left_border_average_color[1],left_border_average_color[2],left_border_average_color[3]);
 
-  freePixels(pixels_image);
-
-  // calcul de la couleur moyenne des 4 bordures
+  // establishing the average color of the frame
   static int average_RGBA[4];
   for(int i=0;i<4;i++){
     average_RGBA[i] = up_border_average_color[i]+right_border_average_color[i]+down_border_average_color[i]+left_border_average_color[i];
@@ -188,15 +241,66 @@ int* getAverageColor(){
 }
 
 
+pixel*** read_data(FILE *file, unsigned char* buffer){
+  pixel*** pixels_image;
+  // compare with png signature
+  if (png_sig_cmp(buffer, 0, sizeof(buffer)) == 0) {
+    pixels_image = read_png_file(file);
+  } // compare with jpg signature
+  else if (buffer[0] == 0xFF && buffer[1] == 0xD8 && buffer[2] == 0xFF) {
+    pixels_image = read_jpg_file(file);
+  } 
+  else {
+    fclose(file);
+    printf("Unsupported file format.\n");
+    exit(EXIT_FAILURE_USUPPORTED_FILE_FORMAT);
+  }
+  return pixels_image;
+}
+
 int main(int argc, char *argv[]) {
-  if(argc != 2){
-    puts("Error, format must be: coverflow imagename.png\n");
+  if(argc != 3){
+    puts("Error, format must be: ./coverflow imagename frame_percentage\n");
     abort();
   } 
 
-  read_png_file(argv[1]);
-  int* average_RGBA = getAverageColor();
+  FILE *file = fopen(argv[1], "rb");
+  if(!file){
+    fprintf(stderr,"Error while opening file %s\n", argv[1]);
+    perror("open");
+    exit(EXIT_FAILURE_OPEN_FAILED);
+  } 
+
+  unsigned char buffer[8];
+  int read_len = fread(buffer, 1, sizeof(buffer), file);
+  if(read_len != 8){
+    fclose(file);
+    fprintf(stderr,"Error while reading file %s\n", argv[1]);
+    exit(EXIT_FAILURE_BAD_FILE);
+  }
+
+  int seek = fseek(file,0,SEEK_SET);
+  if(seek){
+    fclose(file);
+    perror("seek");
+    exit(EXIT_FAILURE_BAD_FILE);
+  }
+
+  pixel*** pixels_image = read_data(file, buffer);
+
+  fclose(file);
+
+  float frame_percentage = (float)(atoi(argv[2])/100.0);
+  if(frame_percentage > 100.0 || frame_percentage < 0.0){
+    fprintf(stderr,"Error, frame_percentage must be a value between 0 and 100");
+    exit(EXIT_FAILURE_BAD_PERCENTAGE);
+  }
+  int* average_RGBA = getAverageColor(pixels_image, frame_percentage);
   puts("\n");
   printf("RGBA(%3d,%3d,%3d,%3d)\n",average_RGBA[0],average_RGBA[1],average_RGBA[2],average_RGBA[3]);
+
+
+  freePixels(pixels_image);
+
   return 0;
 }
