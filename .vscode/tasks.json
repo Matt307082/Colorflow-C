@@ -11,7 +11,9 @@
                 "-o",
                 "${fileDirname}/${fileBasenameNoExtension}",
                 "-lpng",
-                "-ljpeg"
+                "-ljpeg",
+                "-L/usr/lib/libbmp",
+                "-lbmp"
             ],
             "options": {
                 "cwd": "${fileDirname}"

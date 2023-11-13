@@ -6,7 +6,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${fileDirname}/${fileBasenameNoExtension}",
-            "args": ["pictures/test-border.png","10"],
+            "args": ["-fpictures/FF0000.bmp","-n 10"],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
             "environment": [],

@@ -1,0 +1,16 @@
+
+This program calculate the average color of the frame a picture and displys it following RGBA standard
+
+
+Usage : ./coverflow -f filename -n frame_percentage
+
+OPTIONS :
+
+-f,      specify the name of the file to open
+-n,      specify the percentage of the frame you want the average color
+-h,      display this help and exit
+
+FILE :
+
+Supported files are PNG, JPEG and BMP files
+
