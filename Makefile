@@ -1,7 +1,7 @@
 # Makefile
 
 CC = gcc
-CFLAGS = -Wall -lpng -ljpeg -L/usr/lib/libbmp -lbmp
+CFLAGS = -Wall -lpng -ljpeg /usr/lib/libbmp/libbmp.c
 
 all: colorflow
 
