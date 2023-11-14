@@ -18,10 +18,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <png.h>
-#include <jpeglib.h>
-#include <bmp.h>
-#include "colorflow.h"
+#include "include/png.h"
+#include "include/jpeglib.h"
+#include "include/bmp.h"
+#include "include/colorflow.h"
 
 
 #define EXIT_FAILURE_OPEN_FAILED 1
@@ -232,7 +232,7 @@ void getAverageBorderColor(pixel*** pixels_image, int *border_average_color, int
   if(pixel_amount == 0){
     pixel_amount = 1; 
   }
-  
+
   for(int y=start_row; y<end_row; y++){
     for(int x=start_column; x<end_column; x++){
       border_average_color[0] += (int)pixels_image[y][x]->red;
