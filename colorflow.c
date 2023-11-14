@@ -30,6 +30,7 @@
 #define EXIT_FAILURE_MALLOC 4
 #define EXIT_FAILURE_BAD_PERCENTAGE 5
 #define EXIT_FAILURE_UNKNOWN_OPTION 6
+#define EXIT_FAILURE_NEEDS_ARGUMENT 7
 
 int width, height;
 
@@ -227,6 +228,11 @@ pixel*** read_bmp_file(FILE *file){
 void getAverageBorderColor(pixel*** pixels_image, int *border_average_color, int start_row, int end_row, int start_column, int end_column){
   // establishing average color of the selected border
   int pixel_amount = ((end_row-start_row)*(end_column-start_column));
+
+  if(pixel_amount == 0){
+    pixel_amount = 1; 
+  }
+  
   for(int y=start_row; y<end_row; y++){
     for(int x=start_column; x<end_column; x++){
       border_average_color[0] += (int)pixels_image[y][x]->red;
@@ -308,10 +314,14 @@ void displayHelp(){
 }
 
 int main(int argc, char *argv[]) {
+  if(argc == 1){
+    fprintf(stderr,"Error: colorflow needs arguments\n\nRun \"colorflow -h\" to get more details\n");
+    exit(EXIT_FAILURE_NEEDS_ARGUMENT);
+  }
   //parsing command line arguments
   int opt;
   char* filename;
-  int percentage = -1;
+  int percentage = -1 ;
 
   while((opt = getopt(argc, argv, "dh?f:n:")) != -1){
     switch(opt){
@@ -360,6 +370,9 @@ int main(int argc, char *argv[]) {
 
   fclose(file);
 
+  if(percentage == -1){
+    percentage = 10; // setting default value
+  }
   double frame_percentage = (double)(percentage/100.0);
   if(frame_percentage > 1.0 || frame_percentage <= 0.0){
     fprintf(stderr,"Error : frame_percentage must be a value between 0 and 100\n");

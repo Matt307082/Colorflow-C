@@ -6,7 +6,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${fileDirname}/${fileBasenameNoExtension}",
-            "args": ["-fpictures/FF0000.bmp","-n 10"],
+            "args": ["-fpictures/1x1.png"],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
             "environment": [],

@@ -1,5 +1,5 @@
 
-This program calculate the average color of the frame a picture and displys it following RGBA standard
+This program calculate the average color of the frame a picture and displys it following HEX standard
 
 
 Usage : ./coverflow -f filename -n frame_percentage

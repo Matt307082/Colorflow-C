@@ -7,24 +7,22 @@ IMAGES_DIRECTORY="./pictures"
 PASSED_TESTS=0
 EXECUTED_TESTS=0
 
-for IMAGE_FILE in "$IMAGES_DIRECTORY"/*; do
+for IMAGE_FILE in $IMAGES_DIRECTORY/*.bmp $IMAGES_DIRECTORY/*.jpeg $IMAGES_DIRECTORY/*.png; do
 
     if [ -f "$IMAGE_FILE" ]; then
 
-        IDENTIFIER=$(basename "$IMAGE_FILE" | cut -d'.' -f1)
+        RESULT=$(./colorflow -f${IMAGE_FILE})
 
-        RESULT=$(./colorflow -f${IMAGE_FILE} -n 10)
-
-
+        EXPECTED="$(cat $IMAGE_FILE.result)"
         
-        if [ "${RESULT:0:6}" = "$IDENTIFIER" ] && [ $? -eq 0 ]; then
+        if [ $? -eq 0 ] && [ "$RESULT" = "$EXPECTED" ]; then
             echo "Test $IMAGE_FILE ok"
             let "PASSED_TESTS+=1"
         else
             echo "Test $IMAGE_FILE failed"
             echo "-----------------------------------------------"
-            echo "Expected: $IDENTIFIER"
-            echo "Got: ${RESULT:0:6}"
+            echo "Expected: $IMAGE_FILE.result"
+            echo "Got: $RESULT"
             echo "-----------------------------------------------"
         fi
         let "EXECUTED_TESTS+=1"

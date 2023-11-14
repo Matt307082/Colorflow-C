@@ -8,5 +8,5 @@ all: colorflow
 colorflow: colorflow.c 
 	${CC} colorflow.c -o colorflow ${CFLAGS}
 
-test: tests_script.sh
-	$(shell) ./tests_script.sh
+test: mktests.sh
+	$(shell) ./mktests.sh
