@@ -1,0 +1,14 @@
+{
+  "name": "colorflow.js",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "build": "node-gyp configure build"
+  },
+  "author": "matteo beghelli",
+  "license": "ISC",
+  "dependencies": {
+    "node-gyp": "^10.0.1"
+  }
+}
