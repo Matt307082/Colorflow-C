@@ -1,11 +1,14 @@
+#include <node/node.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
-#include "include/png.h"
-#include "include/jpeglib.h"
-#include "include/bmp.h"
-#include "include/colorflow.h"
+#include <png.h>
+#include <jpeglib.h>
+#include <bmp.h>
+#include "../include/colorflow.h"
 
+extern "C"{
 
 #define EXIT_FAILURE_OPEN_FAILED 1
 #define EXIT_FAILURE_BAD_FILE 2
@@ -15,8 +18,15 @@
 #define EXIT_FAILURE_UNKNOWN_OPTION 6
 #define EXIT_FAILURE_NEEDS_ARGUMENT 7
 
+// Initialize global varibales
 int width, height;
 
+/// @brief Create a pixel 
+/// @param R red value
+/// @param G green value
+/// @param B blue value
+/// @param A alpha value
+/// @return pointer to the created pixel
 pixel* createPixel(unsigned char R, unsigned char G, unsigned char B, unsigned char A){
   pixel* p = (pixel*)malloc(sizeof(pixel));
   if (!p) {
@@ -29,7 +39,8 @@ pixel* createPixel(unsigned char R, unsigned char G, unsigned char B, unsigned c
   p->alpha = A;
   return p;
 }
-
+/// @brief free the allocated memory for one pixel
+/// @param pixel pixel we want to free
 void freePixel(pixel** pixel){
   free(*pixel);
   *pixel=NULL;
@@ -196,6 +207,10 @@ pixel*** read_bmp_file(FILE *file){
     height = img.img_header.biHeight;
     width = img.img_header.biWidth;
 
+    if(img.img_header.biBitCount == 8){
+      printf("noir et blanc !\n");
+    }
+
     pixel*** pixels = (pixel***)malloc(height*sizeof(pixel**) + height*width*sizeof(pixel*));
     if(!pixels){
           fprintf(stderr,"Error while allowing memory.\n");
@@ -304,37 +319,7 @@ void displayHelp(){
   fclose(file);
 }
 
-int main(int argc, char *argv[]) {
-  if(argc == 1){
-    fprintf(stderr,"Error: colorflow needs arguments\n\nRun \"colorflow -h\" to get more details\n");
-    exit(EXIT_FAILURE_NEEDS_ARGUMENT);
-  }
-  //parsing command line arguments
-  int opt;
-  char* filename;
-  int percentage = -1 ;
-
-  while((opt = getopt(argc, argv, "dh?f:n:")) != -1){
-    switch(opt){
-      case 'f':
-        filename = optarg;
-        break;
-      case 'n':
-      case '?':
-        percentage = atoi(optarg);
-        break;
-      case 'h':
-        displayHelp();
-        return 0;
-      case 'd':
-        puts("Run debug\n");
-        abort();
-      default:
-        fprintf(stderr,"Error: Unknown option -%c\n", optopt);
-        exit(EXIT_FAILURE_UNKNOWN_OPTION);
-    }
-  }
-
+char* getColor(char* filename) {
   FILE *file = fopen(filename, "rb");
   if(!file){
     fprintf(stderr,"Error while opening file %s\n", filename);
@@ -361,19 +346,59 @@ int main(int argc, char *argv[]) {
 
   fclose(file);
 
-  if(percentage == -1){
-    percentage = 10; // setting default value
-  }
-  double frame_percentage = (double)(percentage/100.0);
-  if(frame_percentage > 1.0 || frame_percentage <= 0.0){
-    fprintf(stderr,"Error : frame_percentage must be a value between 0 and 100\n");
-    exit(EXIT_FAILURE_BAD_PERCENTAGE);
-  }
-
-  int* average_RGBA = getAverageColor(pixels_image, frame_percentage);
-  printf("%02X%02X%02X-%02X\n",average_RGBA[0],average_RGBA[1],average_RGBA[2],average_RGBA[3]);
-
+  int* average_RGBA = getAverageColor(pixels_image, 0.1);
   freePixels(pixels_image);
+  char average_HEX[20];
+  for(int i=0;i<3;i++){
+    char tmp_str[5];
+    sprintf(tmp_str, "%02X", average_RGBA[i]);
+    strcat(average_HEX, tmp_str);
+  }
+  strcat(average_HEX, "-");
+  char tmp_str[5];
+  sprintf(tmp_str, "%02X", average_RGBA[3]);
+  strcat(average_HEX, tmp_str);
 
-  return 0;
+  return average_HEX;
 }
+}
+
+using v8::FunctionCallbackInfo;
+using v8::Isolate;
+using v8::String;
+using v8::Local;
+using v8::Object;
+using v8::Value;
+
+void GetAverageColor(const v8::FunctionCallbackInfo<v8::Value>& args){
+    Isolate* isolate = args.GetIsolate();
+    
+    if (args.Length() < 1) {
+        isolate->ThrowException(v8::Exception::TypeError(
+            String::NewFromUtf8(isolate, "Wrong number of arguments").ToLocalChecked()));
+        return;
+    }
+
+    if (!args[0]->IsString()) {
+        isolate->ThrowException(v8::Exception::TypeError( 
+            String::NewFromUtf8(isolate, "Argument must be a string").ToLocalChecked()));
+        return;
+    }
+
+    String::Utf8Value utf8Value(isolate, args[0]);
+    char* filename = *utf8Value;
+
+    char* result = getColor(filename);
+
+    // Convert the C string result to a v8 string
+    Local<v8::String> v8Result = String::NewFromUtf8(isolate, result).ToLocalChecked();
+
+    args.GetReturnValue().Set(v8Result);
+}
+
+void Initialize(v8::Local<v8::Object> exports){
+    NODE_SET_METHOD(exports, "getAverageColor", GetAverageColor);
+}
+
+NODE_MODULE(colorflow, Initialize);
+
