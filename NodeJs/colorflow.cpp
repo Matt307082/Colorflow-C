@@ -1,11 +1,12 @@
+#include <iostream>
 #include <node/node.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include <png.h>
-#include <jpeglib.h>
-#include <bmp.h>
+#include "../include/png.h"
+#include "../include/jpeglib.h"
+#include "../include/bmp.h"
 #include "../include/colorflow.h"
 
 extern "C"{
@@ -304,21 +305,6 @@ pixel*** read_data(FILE *file, unsigned char* buffer){
   return pixels_image;
 }
 
-void displayHelp(){
-  char* filename = "help.txt";
-  FILE *file = fopen(filename, "rt");
-  if(!file){
-    fprintf(stderr,"Error while opening file %s\n", filename);
-    perror("open");
-    exit(EXIT_FAILURE_OPEN_FAILED);
-  }
-  char c; 
-  while((c=fgetc(file))!=EOF){
-    printf("%c",c);
-  }
-  fclose(file);
-}
-
 char* getColor(char* filename) {
   FILE *file = fopen(filename, "rb");
   if(!file){
@@ -348,7 +334,12 @@ char* getColor(char* filename) {
 
   int* average_RGBA = getAverageColor(pixels_image, 0.1);
   freePixels(pixels_image);
-  char average_HEX[20];
+  
+  char* average_HEX = (char*)malloc(15);
+  if(!average_HEX){
+        fprintf(stderr,"Error while allowing memory for pixel matrix.\n");
+        exit(EXIT_FAILURE_MALLOC);
+  }
   for(int i=0;i<3;i++){
     char tmp_str[5];
     sprintf(tmp_str, "%02X", average_RGBA[i]);
@@ -392,6 +383,7 @@ void GetAverageColor(const v8::FunctionCallbackInfo<v8::Value>& args){
 
     // Convert the C string result to a v8 string
     Local<v8::String> v8Result = String::NewFromUtf8(isolate, result).ToLocalChecked();
+    free(result);
 
     args.GetReturnValue().Set(v8Result);
 }
@@ -401,4 +393,3 @@ void Initialize(v8::Local<v8::Object> exports){
 }
 
 NODE_MODULE(colorflow, Initialize);
-

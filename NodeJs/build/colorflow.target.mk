@@ -132,7 +132,7 @@ LDFLAGS_Release := \
 
 LIBS := \
 	/usr/lib/x86_64-linux-gnu/libbmp.so \
-	/usr/lib/x86_64-linux-gnu/libjpeg.so.8.2.2 \
+	/usr/lib/x86_64-linux-gnu/libjpeg.so \
 	/usr/lib/x86_64-linux-gnu/libpng.so
 
 $(obj).target/colorflow.node: GYP_LDFLAGS := $(LDFLAGS_$(BUILDTYPE))
