@@ -131,7 +131,6 @@ LDFLAGS_Release := \
 	-m64
 
 LIBS := \
-	/usr/lib/x86_64-linux-gnu/libbmpc++.so \
 	/usr/lib/x86_64-linux-gnu/libjpeg.so \
 	/usr/lib/x86_64-linux-gnu/libpng.so
 

@@ -200,35 +200,52 @@ pixel*** read_jpg_file(FILE *file){
 /// @brief 
 /// @param file 
 /// @return 
-/// @author code from https://github.com/marc-q/libbmp/blob/master/libbmp.c 
+/// @authors code inspired by https://stackoverflow.com/questions/14279242/read-bitmap-file-into-structure
 pixel*** read_bmp_file(FILE *file){
-  // Charger l'image BMP
-    bmp_img img;
-    bmp_img_read(&img, file);
-    height = img.img_header.biHeight;
-    width = img.img_header.biWidth;
+  BMPHeader header;
+  int read_len = fread(&header, sizeof(BMPHeader), 1, file);
+  if(read_len != 1){
+    fclose(file);
+    fprintf(stderr,"Error while reading file\n");
+    exit(EXIT_FAILURE_BAD_FILE);
+  }
 
-    if(img.img_header.biBitCount == 8){
-      printf("noir et blanc !\n");
-    }
+  int seek = fseek(file, header.offset, SEEK_SET);
+  if(seek){
+    fclose(file);
+    perror("seek");
+    exit(EXIT_FAILURE_BAD_FILE);
+  }
 
-    pixel*** pixels = (pixel***)malloc(height*sizeof(pixel**) + height*width*sizeof(pixel*));
-    if(!pixels){
-          fprintf(stderr,"Error while allowing memory.\n");
-          exit(EXIT_FAILURE_MALLOC);
-    }
+  height = header.height;
+  width = header.width;
 
-    for (int y = 0; y < height; y++) {
-      pixels[y] = (pixel**)(pixels + height) + width * y;
+  pixel*** pixels = (pixel***)malloc(height*sizeof(pixel**) + height*width*sizeof(pixel*));
+  if(!pixels){
+        fprintf(stderr,"Error while allowing memory for pixel matrix.\n");
+        exit(EXIT_FAILURE_MALLOC);
+  }
+
+  int padding = (4 - (width * 3) % 4) % 4; // BMP rows are padded to be multiples of 4 bytes
+  for (int y = height - 1; y >= 0; y--) {
+    pixels[y] = (pixel**)(pixels + height) + width * y;
       for (int x = 0; x < width; x++) {
-          bmp_pixel pixel = img.img_pixels[y][x];
-          pixels[y][x] = createPixel(pixel.red,pixel.green,pixel.blue,(unsigned char) 255);
+          unsigned char pixel[3];
+          int read_len = fread(&pixel, sizeof(unsigned char), 3, file);
+          if(read_len != 3){
+            fclose(file);
+            fprintf(stderr,"Error while reading file\n");
+            exit(EXIT_FAILURE_BAD_FILE);
+          }
+          pixels[y][x] = createPixel(pixel[2],pixel[1],pixel[0],255); // because in bmp format pixel colors are stored as BGR not RGB
       }
-    }
-
-    // Libérer la mémoire allouée pour l'image BMP
-    bmp_img_free(&img);
-
+      int seek = fseek(file, padding, SEEK_CUR); // Skip padding at the end of each row
+      if(seek){
+        fclose(file);
+        perror("seek");
+        exit(EXIT_FAILURE_BAD_FILE);
+      }
+  }
     return pixels;
 }
 
