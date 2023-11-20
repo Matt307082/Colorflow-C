@@ -10,3 +10,6 @@ colorflow: colorflow.c
 
 test: mktests.sh
 	$(shell) ./mktests.sh
+
+result: mkresult.sh colorflow
+	$(shell) ./mkresult.sh
