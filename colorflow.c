@@ -1,8 +1,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <assert.h>
+#include <sys/stat.h>
 #include "include/png.h"
 #include "include/jpeglib.h"
+#include "include/libnsbmp.h"
 #include "include/colorflow.h"
 
 
@@ -16,6 +19,7 @@
 
 // Initialization of global variables
 int width, height;
+size_t size;
 
 /// @param R Red component
 /// @param G Green component
@@ -197,59 +201,124 @@ pixel*** read_jpg_file(FILE *file){
   return pixels;
 }
 
+/******************************************************************************************************************************************************************************
+ *                                                                                                                                                                            *
+ *                 Reading BMP files, all the following part is inspired by example code of libnsbmp http://source.netsurf-browser.org/libnsbmp.git/                          *
+ *                                                                                                                                                                            *
+*******************************************************************************************************************************************************************************/
+
+#define BYTES_PER_PIXEL 4
+#define MAX_IMAGE_BYTES (48 * 1024 * 1024)
+
+static void *bitmap_create(int width, int height, unsigned int state)
+{
+        (void) state;  /* unused */
+        /* ensure a stupidly large (>50Megs or so) bitmap is not created */
+        if (((long long)width * (long long)height) > (MAX_IMAGE_BYTES/BYTES_PER_PIXEL)) {
+                return NULL;
+        }
+        return calloc(width * height, BYTES_PER_PIXEL);
+}
+
+
+static unsigned char *bitmap_get_buffer(void *bitmap)
+{
+        assert(bitmap);
+        return (unsigned char*)bitmap;
+}
+
+
+static size_t bitmap_get_bpp(void *bitmap)
+{
+        (void) bitmap;  /* unused */
+        return BYTES_PER_PIXEL;
+}
+
+
+static void bitmap_destroy(void *bitmap)
+{
+        assert(bitmap);
+        free(bitmap);
+}
+
+static unsigned char *load_file(FILE *fd, size_t *data_size)
+{
+        unsigned char *buffer;
+        size_t n;
+
+        buffer = (unsigned char*)malloc(size);
+        if (!buffer) {
+          fprintf(stderr,"Error while allowing memory.\n");
+          exit(EXIT_FAILURE_MALLOC);
+        }
+
+        n = fread(buffer, 1, size, fd);
+        if (n != size) {
+          exit(EXIT_FAILURE);
+        }
+
+        *data_size = size;
+        return buffer;
+}
+
 /// @brief read a bmp file and store the RGBA values of each pixel in a matrix
 /// @param file binary file of a bmp picture
 /// @return matrix of pixels that contains the RGBA values of each pixel
-/// @authors code inspired by https://stackoverflow.com/questions/14279242/read-bitmap-file-into-structure
+/// @authors code inspired by http://source.netsurf-browser.org/libnsbmp.git/
 pixel*** read_bmp_file(FILE *file){
-  BMPHeader header;
-  int read_len = fread(&header, sizeof(BMPHeader), 1, file);
-  if(read_len != 1){
-    fclose(file);
-    fprintf(stderr,"Error while reading file\n");
-    exit(EXIT_FAILURE_BAD_FILE);
+  bmp_bitmap_callback_vt bitmap_callbacks = {
+    bitmap_create,
+    bitmap_destroy,
+    bitmap_get_buffer,
+    bitmap_get_bpp
+  };
+  bmp_result code;
+  bmp_image bmp;
+  size_t data_size;
+
+  /* create our bmp image */
+  bmp_create(&bmp, &bitmap_callbacks);
+
+  /* load file into memory */
+  unsigned char *data = load_file(file, &data_size);
+
+  /* analyse the BMP */
+  code = bmp_analyse(&bmp, size, data);
+  if (code != BMP_OK) {
+    goto cleanup;
   }
 
-  // Skipping the rest of the header
-  int seek = fseek(file, header.offset, SEEK_SET);
-  if(seek){
-    fclose(file);
-    perror("seek");
-    exit(EXIT_FAILURE_BAD_FILE);
-  }
+  /* decode the image */
+  code = bmp_decode(&bmp);
+  if (code != BMP_OK) {
+    goto cleanup;
+  }  
 
-  height = header.height;
-  width = header.width;
+  height = bmp.height;
+  width = bmp.width;
 
   // Allowing the memory for the matrix of pixels
   pixel*** pixels = (pixel***)malloc(height*sizeof(pixel**) + height*width*sizeof(pixel*));
   if(!pixels){
-        fprintf(stderr,"Error while allowing memory for pixel matrix.\n");
+        fprintf(stderr,"Error while allowing memory.\n");
         exit(EXIT_FAILURE_MALLOC);
   }
 
-  int padding = (4 - (width * 3) % 4) % 4; // BMP rows are padded to be multiples of 4 bytes
-  for (int y = height - 1; y >= 0; y--) {
+  uint8_t *image = (uint8_t *) bmp.bitmap;
+  for (int y = 0; y < height; y++) {
     pixels[y] = (pixel**)(pixels + height) + width * y;
-      for (int x = 0; x < width; x++) {
-          unsigned char pixel[3];
-          int read_len = fread(&pixel, sizeof(unsigned char), 3, file);
-          if(read_len != 3){
-            fclose(file);
-            fprintf(stderr,"Error while reading file\n");
-            exit(EXIT_FAILURE_BAD_FILE);
-          }
-          pixels[y][x] = createPixel(pixel[2],pixel[1],pixel[0],255); // Because in bmp format pixel colors are stored as BGR not RGB
-      }
-      int seek = fseek(file, padding, SEEK_CUR); // Skip padding at the end of each row
-      if(seek){
-        fclose(file);
-        perror("seek");
-        exit(EXIT_FAILURE_BAD_FILE);
-      }
+    for (int x = 0; x < width; x++) {
+      size_t z = (y * width + x) * BYTES_PER_PIXEL;
+      pixels[y][x] = createPixel(image[z],image[z + 1],image[z + 2],255);
+    }
   }
 
-    return pixels;
+  cleanup:
+    /* clean up */
+    bmp_finalise(&bmp);
+    free(data);
+
+  return pixels;
 }
 
 /// @brief Return the average color of of a certain rectangular area of an image determined by start_row, end_row, start_column, end_column
@@ -356,6 +425,7 @@ void displayHelp(){
 }
 
 int main(int argc, char *argv[]) {
+  struct stat sb;
   if(argc == 1){
     fprintf(stderr,"Error: colorflow needs arguments\n\nRun \"colorflow -h\" to get more details\n");
     exit(EXIT_FAILURE_NEEDS_ARGUMENT);
@@ -392,6 +462,12 @@ int main(int argc, char *argv[]) {
     perror("open");
     exit(EXIT_FAILURE_OPEN_FAILED);
   } 
+
+  if (stat(filename, &sb)) {
+    perror(filename);
+    exit(EXIT_FAILURE_BAD_FILE);
+  }
+  size = sb.st_size;
 
   // Reading the first bytes of the binary file and store it in an array 
   unsigned char buffer[8];

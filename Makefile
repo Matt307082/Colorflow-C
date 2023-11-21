@@ -1,7 +1,7 @@
 # Makefile
 
 CC = gcc
-CFLAGS = -Wall -lpng -ljpeg 
+CFLAGS = -Wall -lpng -ljpeg include/libnsbmp.c
 
 all: colorflow
 
