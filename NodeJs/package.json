@@ -1,15 +1,14 @@
 {
-  "name": "@mbeghelli/colorflow-lib",
+  "name": "colorflow-lib",
   "version": "1.0.0",
   "description": "Gives the HEX value of the average color of the borders of an image",
-  "main": "index.js",
+  "main": "colorflow.js",
   "scripts": {
     "build": "node-gyp configure build"
   },
   "author": "matteo beghelli",
   "license": "ISC",
   "dependencies": {
-    "node-gyp": "^10.0.1",
-    "nodemon": "^3.0.1"
+    "node-gyp": "^10.0.1"
   }
 }

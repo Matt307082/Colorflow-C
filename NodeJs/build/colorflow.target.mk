@@ -41,13 +41,13 @@ CFLAGS_CC_Debug := \
 	-std=gnu++17
 
 INCS_Debug := \
-	-I/home/matt/.cache/node-gyp/20.9.0/include/node \
-	-I/home/matt/.cache/node-gyp/20.9.0/src \
-	-I/home/matt/.cache/node-gyp/20.9.0/deps/openssl/config \
-	-I/home/matt/.cache/node-gyp/20.9.0/deps/openssl/openssl/include \
-	-I/home/matt/.cache/node-gyp/20.9.0/deps/uv/include \
-	-I/home/matt/.cache/node-gyp/20.9.0/deps/zlib \
-	-I/home/matt/.cache/node-gyp/20.9.0/deps/v8/include
+	-I/home/matteobeghelli/.cache/node-gyp/18.18.2/include/node \
+	-I/home/matteobeghelli/.cache/node-gyp/18.18.2/src \
+	-I/home/matteobeghelli/.cache/node-gyp/18.18.2/deps/openssl/config \
+	-I/home/matteobeghelli/.cache/node-gyp/18.18.2/deps/openssl/openssl/include \
+	-I/home/matteobeghelli/.cache/node-gyp/18.18.2/deps/uv/include \
+	-I/home/matteobeghelli/.cache/node-gyp/18.18.2/deps/zlib \
+	-I/home/matteobeghelli/.cache/node-gyp/18.18.2/deps/v8/include
 
 DEFS_Release := \
 	'-DNODE_GYP_MODULE_NAME=colorflow' \
@@ -85,16 +85,16 @@ CFLAGS_CC_Release := \
 	-std=gnu++17
 
 INCS_Release := \
-	-I/home/matt/.cache/node-gyp/20.9.0/include/node \
-	-I/home/matt/.cache/node-gyp/20.9.0/src \
-	-I/home/matt/.cache/node-gyp/20.9.0/deps/openssl/config \
-	-I/home/matt/.cache/node-gyp/20.9.0/deps/openssl/openssl/include \
-	-I/home/matt/.cache/node-gyp/20.9.0/deps/uv/include \
-	-I/home/matt/.cache/node-gyp/20.9.0/deps/zlib \
-	-I/home/matt/.cache/node-gyp/20.9.0/deps/v8/include
+	-I/home/matteobeghelli/.cache/node-gyp/18.18.2/include/node \
+	-I/home/matteobeghelli/.cache/node-gyp/18.18.2/src \
+	-I/home/matteobeghelli/.cache/node-gyp/18.18.2/deps/openssl/config \
+	-I/home/matteobeghelli/.cache/node-gyp/18.18.2/deps/openssl/openssl/include \
+	-I/home/matteobeghelli/.cache/node-gyp/18.18.2/deps/uv/include \
+	-I/home/matteobeghelli/.cache/node-gyp/18.18.2/deps/zlib \
+	-I/home/matteobeghelli/.cache/node-gyp/18.18.2/deps/v8/include
 
 OBJS := \
-	$(obj).target/$(TARGET)/colorflow.o
+	$(obj).target/$(TARGET)/native/colorflow.o
 
 # Add to the list of files we specially track dependencies for.
 all_deps += $(OBJS)
@@ -131,8 +131,7 @@ LDFLAGS_Release := \
 	-m64
 
 LIBS := \
-	/usr/lib/x86_64-linux-gnu/libjpeg.so \
-	/usr/lib/x86_64-linux-gnu/libpng.so
+	/usr/local/lib/libcolorflow.so
 
 $(obj).target/colorflow.node: GYP_LDFLAGS := $(LDFLAGS_$(BUILDTYPE))
 $(obj).target/colorflow.node: LIBS := $(LIBS)
