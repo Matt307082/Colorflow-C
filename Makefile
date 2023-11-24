@@ -13,3 +13,6 @@ test: mktests.sh
 
 result: mkresult.sh colorflow
 	$(shell) ./mkresult.sh
+
+clean: colorflow
+	rm colorflow
