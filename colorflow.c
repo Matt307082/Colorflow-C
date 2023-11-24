@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <getopt.h>
 #include <assert.h>
 #include <sys/stat.h>
 #include "include/png.h"
@@ -21,50 +22,37 @@
 int width, height;
 size_t size;
 
-/// @param R Red component
-/// @param G Green component
-/// @param B Blue component
-/// @param A Alpha component
+// Variable to check if debug mode is enabled or not
+int debug_mode = 0;
+
+void displayDebugInfo(char* debugInfo){
+  printf("%s\n", debugInfo);
+}
+
+/// @param r Red component
+/// @param g Green component
+/// @param b Blue component
+/// @param a Alpha component
 /// @return new created pixel with the specified RGBA values
-pixel* createPixel(unsigned char R, unsigned char G, unsigned char B, unsigned char A){
-  pixel* p = (pixel*)malloc(sizeof(pixel));
-  if (!p) {
-        fprintf(stderr,"Error while allocating memory for pixel.\n");
-        exit(EXIT_FAILURE_MALLOC);
-  }
-  p->red = R;
-  p->green = G;
-  p->blue = B;
-  p->alpha = A;
+pixel createPixel(unsigned char r, unsigned char g, unsigned char b, unsigned char a){
+  pixel p;
+  p.red = r;
+  p.green = g;
+  p.blue = b;
+  p.alpha = a;
   return p;
-}
-
-/// @brief free the allocate memory for one pixel
-/// @param pixel pixel we want to free the memory
-void freePixel(pixel** pixel){
-  free(*pixel);
-  *pixel=NULL;
-}
-
-/// @brief free the allocate memory for a matrix of pixels
-/// @param pixels matrix of pixels we want to free the memory
-void freePixels(pixel*** pixels) {
-  for (int y = 0; y < height; y++) {
-          for (int x = 0; x < width; x++) {
-              if (pixels[y][x]) {
-                  freePixel(&pixels[y][x]);
-              }
-          }
-      }
-  free(pixels);
-  pixels=NULL;
 }
 
 /// @brief read a png file and store the RGBA values of each pixel in a matrix
 /// @param file binary file of a png picture
 /// @return matrix of pixels that contains the RGBA values of each pixel
 /// @author code from https://gist.github.com/niw/5963798
-pixel*** read_png_file(FILE *file) {
+pixel** read_png_file(FILE *file) {
+  
+  if(debug_mode){
+    displayDebugInfo("pixel** read_png_file(FILE *file)");
+  }
+
   png_byte color_type;
   png_byte bit_depth;
   png_bytep *row_pointers = NULL;
@@ -124,14 +112,14 @@ pixel*** read_png_file(FILE *file) {
   png_read_image(png, row_pointers);
 
   // Allowing the memory for the matrix of pixels
-  pixel*** pixels = (pixel***)malloc(height*sizeof(pixel**) + height*width*sizeof(pixel*));
+  pixel** pixels = (pixel**)malloc(height*sizeof(pixel*) + height*width*sizeof(pixel));
   if(!pixels){
         fprintf(stderr,"Error while allowing memory for pixel matrix.\n");
         exit(EXIT_FAILURE_MALLOC);
   }
 
   for(int y = 0; y < height; y++) {
-    pixels[y] = (pixel**)(pixels + height) + width * y;
+    pixels[y] = (pixel*)(pixels + height) + width * y;
     png_bytep row = row_pointers[y];
     for(int x = 0; x < width; x++) {
       png_bytep px = &(row[x * 4]);
@@ -149,7 +137,11 @@ pixel*** read_png_file(FILE *file) {
 /// @param file binary file of a jpeg picture
 /// @return matrix of pixels that contains the RGBA values of each pixel
 /// @author code inspired by this code https://github.com/LuaDist/libjpeg/blob/master/example.c
-pixel*** read_jpg_file(FILE *file){
+pixel** read_jpg_file(FILE *file){
+
+  if(debug_mode){
+    displayDebugInfo("pixel** read_jpg_file(FILE *file)");
+  }
 
   // Structure for JPEG picture
   struct jpeg_decompress_struct cinfo;
@@ -177,7 +169,7 @@ pixel*** read_jpg_file(FILE *file){
   JSAMPARRAY buffer = (*cinfo.mem->alloc_sarray)((j_common_ptr) &cinfo, JPOOL_IMAGE, row_stride, 1);
 
   // Allowing the memory for the matrix of pixels
-  pixel*** pixels = (pixel***)malloc(height*sizeof(pixel**) + height*width*sizeof(pixel*));
+  pixel** pixels = (pixel**)malloc(height*sizeof(pixel*) + height*width*sizeof(pixel));
   if(!pixels){
         fprintf(stderr,"Error while allowing memory.\n");
         exit(EXIT_FAILURE_MALLOC);
@@ -186,9 +178,13 @@ pixel*** read_jpg_file(FILE *file){
 
   for(int y=0; y<height;y++){
     (void) jpeg_read_scanlines(&cinfo, buffer, 1);
-    pixels[y] = (pixel**)(pixels + height) + width * y;
+    pixels[y] = (pixel*)(pixels + height) + width * y;
     for (int x = 0; x < width; x++) {
-      pixels[y][x] = createPixel(buffer[0][x * numComponents],buffer[0][x * numComponents + 1],buffer[0][x * numComponents + 2],(cinfo.output_components == 4) ? buffer[0][x * numComponents + 2] : 255);
+      pixels[y][x] = createPixel(
+        buffer[0][x * numComponents],
+        buffer[0][x * numComponents + 1],
+        buffer[0][x * numComponents + 2],
+        (cinfo.output_components == 4) ? buffer[0][x * numComponents + 3] : 255);
     }
   }
 
@@ -212,60 +208,71 @@ pixel*** read_jpg_file(FILE *file){
 
 static void *bitmap_create(int width, int height, unsigned int state)
 {
-        (void) state;  /* unused */
-        /* ensure a stupidly large (>50Megs or so) bitmap is not created */
-        if (((long long)width * (long long)height) > (MAX_IMAGE_BYTES/BYTES_PER_PIXEL)) {
-                return NULL;
-        }
-        return calloc(width * height, BYTES_PER_PIXEL);
+  (void) state;  /* unused */
+  /* ensure a stupidly large (>50Megs or so) bitmap is not created */
+  if (((long long)width * (long long)height) > (MAX_IMAGE_BYTES/BYTES_PER_PIXEL)) {
+          return NULL;
+  }
+  return calloc(width * height, BYTES_PER_PIXEL);
 }
 
 
 static unsigned char *bitmap_get_buffer(void *bitmap)
 {
-        assert(bitmap);
-        return (unsigned char*)bitmap;
+  assert(bitmap);
+  return (unsigned char*)bitmap;
 }
 
 
 static size_t bitmap_get_bpp(void *bitmap)
 {
-        (void) bitmap;  /* unused */
-        return BYTES_PER_PIXEL;
+  (void) bitmap;  /* unused */
+  return BYTES_PER_PIXEL;
 }
 
 
 static void bitmap_destroy(void *bitmap)
 {
-        assert(bitmap);
-        free(bitmap);
+  assert(bitmap);
+  free(bitmap);
 }
 
-static unsigned char *load_file(FILE *fd, size_t *data_size)
+static unsigned char *load_bmp_file(FILE *fd, size_t *data_size)
 {
-        unsigned char *buffer;
-        size_t n;
+  if(debug_mode){
+    char debugInfo[100];
+    sprintf(debugInfo, "static unsigned char *load_bmp_file(FILE *fd, size_t *data_size = %ld)",*data_size);
+    displayDebugInfo(debugInfo);
+  }
 
-        buffer = (unsigned char*)malloc(size);
-        if (!buffer) {
-          fprintf(stderr,"Error while allowing memory.\n");
-          exit(EXIT_FAILURE_MALLOC);
-        }
+  unsigned char *buffer;
+  size_t n;
 
-        n = fread(buffer, 1, size, fd);
-        if (n != size) {
-          exit(EXIT_FAILURE);
-        }
+  buffer = (unsigned char*)malloc(size);
+  if (!buffer) {
+    fprintf(stderr,"Error while allowing memory.\n");
+    exit(EXIT_FAILURE_MALLOC);
+  }
 
-        *data_size = size;
-        return buffer;
+  n = fread(buffer, 1, size, fd);
+  if (n != size) {
+    exit(EXIT_FAILURE);
+  }
+
+  *data_size = size;
+  return buffer;
 }
 
 /// @brief read a bmp file and store the RGBA values of each pixel in a matrix
 /// @param file binary file of a bmp picture
 /// @return matrix of pixels that contains the RGBA values of each pixel
 /// @authors code inspired by http://source.netsurf-browser.org/libnsbmp.git/
-pixel*** read_bmp_file(FILE *file){
+pixel** read_bmp_file(FILE *file){
+
+  if(debug_mode){
+    displayDebugInfo("pixel** read_bmp_file(FILE *file)");
+  }
+
   bmp_bitmap_callback_vt bitmap_callbacks = {
     bitmap_create,
     bitmap_destroy,
@@ -280,7 +287,7 @@ pixel*** read_bmp_file(FILE *file){
   bmp_create(&bmp, &bitmap_callbacks);
 
   /* load file into memory */
-  unsigned char *data = load_file(file, &data_size);
+  unsigned char *data = load_bmp_file(file, &data_size);
 
   /* analyse the BMP */
   code = bmp_analyse(&bmp, size, data);
@@ -298,7 +305,7 @@ pixel*** read_bmp_file(FILE *file){
   width = bmp.width;
 
   // Allowing the memory for the matrix of pixels
-  pixel*** pixels = (pixel***)malloc(height*sizeof(pixel**) + height*width*sizeof(pixel*));
+  pixel** pixels = (pixel**)malloc(height*sizeof(pixel*) + height*width*sizeof(pixel));
   if(!pixels){
         fprintf(stderr,"Error while allowing memory.\n");
         exit(EXIT_FAILURE_MALLOC);
@@ -306,7 +313,7 @@ pixel*** read_bmp_file(FILE *file){
 
   uint8_t *image = (uint8_t *) bmp.bitmap;
   for (int y = 0; y < height; y++) {
-    pixels[y] = (pixel**)(pixels + height) + width * y;
+    pixels[y] = (pixel*)(pixels + height) + width * y;
     for (int x = 0; x < width; x++) {
       size_t z = (y * width + x) * BYTES_PER_PIXEL;
       pixels[y][x] = createPixel(image[z],image[z + 1],image[z + 2],255);
@@ -328,7 +335,14 @@ pixel*** read_bmp_file(FILE *file){
 /// @param end_row specifies on which row the area ends
 /// @param start_column specifies on which column the area starts
 /// @param end_column specifies on which column the area ends
-void getAverageBorderColor(pixel*** pixels_image, int *border_average_color, int start_row, int end_row, int start_column, int end_column){
+void getAverageBorderColor(pixel** pixels_image, int *border_average_color, int start_row, int end_row, int start_column, int end_column){
+
+  if(debug_mode){
+    char debugInfo[175];
+    sprintf(debugInfo,"void getAverageBorderColor(pixel** pixels_image, int *border_average_color, int start_row = %d, int end_row = %d, int start_column = %d, int end_column = %d)",start_row, end_row,start_column,end_column);
+    displayDebugInfo(debugInfo);
+  }
+
   // establishing average color of the selected border
   int pixel_amount = ((end_row-start_row)*(end_column-start_column));
 
@@ -340,10 +354,10 @@ void getAverageBorderColor(pixel*** pixels_image, int *border_average_color, int
   // Summing the values of each pixel
   for(int y=start_row; y<end_row; y++){
     for(int x=start_column; x<end_column; x++){
-      border_average_color[0] += (int)pixels_image[y][x]->red;
-      border_average_color[1] += (int)pixels_image[y][x]->green;
-      border_average_color[2] += (int)pixels_image[y][x]->blue;
-      border_average_color[3] += (int)pixels_image[y][x]->alpha;
+      border_average_color[0] += (int)pixels_image[y][x].red;
+      border_average_color[1] += (int)pixels_image[y][x].green;
+      border_average_color[2] += (int)pixels_image[y][x].blue;
+      border_average_color[3] += (int)pixels_image[y][x].alpha;
     }
   }
 
@@ -357,7 +371,13 @@ void getAverageBorderColor(pixel*** pixels_image, int *border_average_color, int
 /// @param pixels_image matrix of pixels
 /// @param frame_percentage percentage of the border to calculate the average RGBA
 /// @return array that contains the average RGBA values
-int* getAverageColor(pixel*** pixels_image, double frame_percentage){
+int* getAverageColor(pixel** pixels_image, float frame_percentage){
+
+  if(debug_mode){
+    char debugInfo[100];
+    sprintf(debugInfo, "int* getAverageColor(pixel** pixels_image, float frame_percentage = %f)",frame_percentage);
+    displayDebugInfo(debugInfo);
+  }
 
   // Establishing average color of the upper border
   int up_border_average_color[4] = {0,0,0,0};
@@ -388,8 +408,13 @@ int* getAverageColor(pixel*** pixels_image, double frame_percentage){
 /// @param file binary file of the picture to open-
 /// @param buffer first characters of the binary file that contains the signature of the format
 /// @return matrix of pixels returned by function called 
-pixel*** read_data(FILE *file, unsigned char* buffer){
-  pixel*** pixels_image;
+pixel** read_data(FILE *file, unsigned char* buffer){
+
+  if(debug_mode){
+    displayDebugInfo("pixel** read_data(FILE *file, unsigned char* buffer)");
+  }
+
+  pixel** pixels_image;
   // Compare with png signature
   if (png_sig_cmp(buffer, 0, sizeof(buffer)) == 0) {
     pixels_image = read_png_file(file);
@@ -410,6 +435,11 @@ pixel*** read_data(FILE *file, unsigned char* buffer){
 
 /// @brief displays help message to the user
 void displayHelp(){
+
+  if(debug_mode){
+    displayDebugInfo("void displayHelp()");
+  }
+
   char* filename = "help.txt";
   FILE *file = fopen(filename, "rt");
   if(!file){
@@ -423,6 +453,7 @@ void displayHelp(){
   }
   fclose(file);
 }
+
 
 int main(int argc, char *argv[]) {
   struct stat sb;
@@ -441,15 +472,15 @@ int main(int argc, char *argv[]) {
         filename = optarg;
         break;
       case 'n':
-      case '?':
         percentage = atoi(optarg);
         break;
       case 'h':
+      case '?':
         displayHelp();
         return 0;
       case 'd':
-        puts("Run debug\n");
-        abort();
+        debug_mode = 1;
+        break;
       default:
         fprintf(stderr,"Error: Unknown option -%c\n", optopt);
         exit(EXIT_FAILURE_UNKNOWN_OPTION);
@@ -486,14 +517,14 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE_BAD_FILE);
   }
 
-  pixel*** pixels_image = read_data(file, buffer);
+  pixel** pixels_image = read_data(file, buffer);
 
   fclose(file);
 
   if(percentage == -1){
     percentage = 10; // setting default value
   }
-  double frame_percentage = (double)(percentage/100.0);
+  float frame_percentage = (float)(percentage/100.0);
   if(frame_percentage > 1.0 || frame_percentage <= 0.0){
     fprintf(stderr,"Error : frame_percentage must be a value between 0 and 100\n");
     exit(EXIT_FAILURE_BAD_PERCENTAGE);
@@ -503,7 +534,7 @@ int main(int argc, char *argv[]) {
   printf("%02X%02X%02X-%02X\n",average_RGBA[0],average_RGBA[1],average_RGBA[2],average_RGBA[3]);
 
   // Free ressources 
-  freePixels(pixels_image);
+  free(pixels_image);
 
   return 0;
 }
